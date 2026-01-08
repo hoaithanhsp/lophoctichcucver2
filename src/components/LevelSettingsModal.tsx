@@ -49,8 +49,10 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
 
     await supabase
       .from('app_settings')
-      .update({ value: thresholds })
-      .eq('key', 'level_thresholds');
+      .upsert(
+        { key: 'level_thresholds', value: thresholds, updated_at: new Date().toISOString() },
+        { onConflict: 'key' }
+      );
 
     setSaving(false);
     onUpdate();
