@@ -69,12 +69,6 @@ export default function LoginScreen({ onLogin, error }: LoginScreenProps) {
           </button>
         </form>
 
-        <div className="login-footer">
-          <p className="login-hint">
-            💡 Nhập bất kỳ tên và mật khẩu để tạo tài khoản mới.<br />
-            Nếu đã có tài khoản, vui lòng nhập đúng tên và mật khẩu đã đăng ký.
-          </p>
-        </div>
       </div>
     </div>
   );
