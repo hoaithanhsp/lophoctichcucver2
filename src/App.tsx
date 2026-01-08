@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trophy, Settings, Download, Upload, Plus, Store, ChevronDown, BarChart3, LogOut, Sliders } from 'lucide-react';
+import { Trophy, Settings, Download, Upload, Plus, Store, ChevronDown, BarChart3, LogOut, Sliders, Users } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { Student, Class, getLevelFromPoints, LevelThresholds } from './lib/types';
 import StudentCard from './components/StudentCard';
@@ -56,58 +56,30 @@ function App() {
     }
   }, [currentClassId, isAuthenticated]);
 
-  const checkAuth = async () => {
+  const checkAuth = () => {
     const savedAuth = localStorage.getItem('classpoint_auth');
     if (savedAuth) {
-      const { username, password } = JSON.parse(savedAuth);
-      
-      // Xác minh lại với database
-      const { data } = await supabase
-        .from('auth_users')
-        .select('*')
-        .eq('username', username)
-        .eq('password', password)
-        .maybeSingle();
-
-      if (data) {
-        setCurrentUsername(username);
-        setIsAuthenticated(true);
-      } else {
-        // Session không hợp lệ - xóa và yêu cầu đăng nhập lại
-        localStorage.removeItem('classpoint_auth');
-      }
+      const { username } = JSON.parse(savedAuth);
+      setCurrentUsername(username);
+      setIsAuthenticated(true);
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleLogin = async (username: string, password: string) => {
     setLoginError('');
 
-    // Kiểm tra xem user đã tồn tại chưa
-    const { data: existingUser } = await supabase
-      .from('auth_users')
-      .select('*')
-      .eq('username', username)
-      .maybeSingle();
+    // Chỉ chấp nhận tài khoản cố định
+    const validUsername = 'Trần Hoài Thanh';
+    const validPassword = 'hoaithanha2';
 
-    if (existingUser) {
-      // User đã tồn tại - kiểm tra password
-      if (existingUser.password === password) {
-        localStorage.setItem('classpoint_auth', JSON.stringify({ username, password }));
-        setCurrentUsername(username);
-        setIsAuthenticated(true);
-      } else {
-        setLoginError('Mật khẩu không đúng! Vui lòng nhập đúng mật khẩu đã đăng ký.');
-      }
-    } else {
-      // User mới - tạo tài khoản và đăng nhập
-      await supabase
-        .from('auth_users')
-        .insert({ username, password });
-      
-      localStorage.setItem('classpoint_auth', JSON.stringify({ username, password }));
-      setCurrentUsername(username);
+    if (username.trim() === validUsername && password === validPassword) {
+      localStorage.setItem('classpoint_auth', JSON.stringify({ username: username.trim() }));
+      setCurrentUsername(username.trim());
       setIsAuthenticated(true);
+    } else {
+      setLoginError('Tên đăng nhập hoặc mật khẩu không đúng!');
     }
   };
 
@@ -144,7 +116,10 @@ function App() {
 
     if (classesData && classesData.length > 0) {
       setClasses(classesData);
-      setCurrentClassId(classesData[0].id);
+      // Only set currentClassId if not already set, or if it's invalid
+      if (!currentClassId || !classesData.find(c => c.id === currentClassId)) {
+        setCurrentClassId(classesData[0].id);
+      }
     } else {
       const { data: newClass } = await supabase
         .from('classes')
@@ -277,21 +252,79 @@ function App() {
     await loadData();
   };
 
-  const handleImportStudents = async (studentsData: { name: string; orderNumber: number }[]) => {
-    const insertData = studentsData.map(s => ({
-      class_id: currentClassId,
-      name: s.name,
-      order_number: s.orderNumber,
-      total_points: 0,
-      level: 'hat' as const,
-      avatar: null
-    }));
+  const handleImportStudents = async (studentsData: { name: string; orderNumber: number; className?: string }[]) => {
+    try {
+      // 1. Group students by class name
+      const studentsByClass: Record<string, typeof studentsData> = {};
+      const studentsNoClass: typeof studentsData = [];
 
-    await supabase
-      .from('students')
-      .insert(insertData);
+      studentsData.forEach(s => {
+        if (s.className && s.className.trim()) {
+          const cName = s.className.trim();
+          if (!studentsByClass[cName]) studentsByClass[cName] = [];
+          studentsByClass[cName].push(s);
+        } else {
+          studentsNoClass.push(s);
+        }
+      });
 
-    await loadData();
+      // 2. Process groups with explicit class name
+      for (const [className, list] of Object.entries(studentsByClass)) {
+        // Find existing class or create new one
+        let targetClassId = classes.find(c => c.name.toLowerCase() === className.toLowerCase())?.id;
+
+        if (!targetClassId) {
+          // Create new class
+          const { data: newClass, error: createError } = await supabase
+            .from('classes')
+            .insert({ name: className })
+            .select()
+            .single();
+
+          if (createError) throw createError;
+          targetClassId = newClass.id;
+        }
+
+        // Insert students into this class
+        const insertData = list.map(s => ({
+          class_id: targetClassId!,
+          name: s.name,
+          order_number: s.orderNumber,
+          total_points: 0,
+          level: 'hat' as const,
+          avatar: null
+        }));
+
+        const { error: insertError } = await supabase.from('students').insert(insertData);
+        if (insertError) throw insertError;
+      }
+
+      // 3. Process students without class (use current selected class)
+      if (studentsNoClass.length > 0) {
+        if (!currentClassId) throw new Error("Vui lòng chọn lớp học để import các học sinh không có thông tin lớp.");
+
+        const insertData = studentsNoClass.map(s => ({
+          class_id: currentClassId,
+          name: s.name,
+          order_number: s.orderNumber,
+          total_points: 0,
+          level: 'hat' as const,
+          avatar: null
+        }));
+
+        const { error: insertError } = await supabase.from('students').insert(insertData);
+        if (insertError) throw insertError;
+      }
+
+      // 4. Refresh data
+      await initializeApp();
+      await loadData();
+      alert(`Đã thêm thành công ${studentsData.length} học sinh!`);
+    } catch (error: any) {
+      console.error('Import failed:', error);
+      alert(`Lỗi khi import: ${error.message}`);
+      throw error;
+    }
   };
 
   const handleClassChange = async (classId: string) => {
@@ -301,8 +334,8 @@ function App() {
 
   const handleExportData = () => {
     const exportData = students.map(student => ({
-      'Tên': student.name,
-      'Số thứ tự': student.order_number,
+      'STT': student.order_number,
+      'Tên học sinh': student.name,
       'Điểm hiện tại': student.total_points,
       'Cấp độ': student.level
     }));
@@ -311,7 +344,8 @@ function App() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Danh sách học sinh');
 
-    const fileName = `danh-sach-hoc-sinh-${new Date().toISOString().split('T')[0]}.xlsx`;
+    const className = currentClass?.name || 'class';
+    const fileName = `danh-sach-${className.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(wb, fileName);
   };
 
@@ -410,16 +444,34 @@ function App() {
           </div>
         </div>
 
-        <div className="students-grid">
-          {getSortedStudents().map(student => (
-            <StudentCard
-              key={student.id}
-              student={student}
-              onPointChange={handlePointChange}
-              onClick={() => setSelectedStudent(student)}
-            />
-          ))}
-        </div>
+        {students.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6 text-gray-300">
+              <Users size={48} />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Chưa có học sinh nào</h3>
+            <p className="text-gray-500 max-w-sm mb-8">Hãy bắt đầu bằng cách thêm học sinh hoặc nhập danh sách từ file Excel.</p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setShowAddStudent(true)} className="px-6 py-3 bg-primary-green text-white rounded-xl font-bold shadow-lg hover:bg-green-600 transition-all">
+                Thêm học sinh đầu tiên
+              </button>
+              <button onClick={() => setShowImportExcel(true)} className="px-6 py-3 bg-white text-gray-700 border border-gray-200 rounded-xl font-bold shadow-sm hover:bg-gray-50 transition-all flex items-center gap-2">
+                <Upload size={18} /> Import Excel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="students-grid">
+            {getSortedStudents().map(student => (
+              <StudentCard
+                key={student.id}
+                student={student}
+                onPointChange={handlePointChange}
+                onClick={() => setSelectedStudent(student)}
+              />
+            ))}
+          </div>
+        )}
       </main>
 
       <footer className="footer">
