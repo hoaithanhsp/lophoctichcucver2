@@ -1,18 +1,20 @@
 import { useState } from 'react';
-import { Student, LEVEL_CONFIG, getProgressToNextLevel } from '../lib/types';
+import { Student, LEVEL_CONFIG, getProgressToNextLevel, getNextLevel, LevelThresholds } from '../lib/types';
 
 interface StudentCardProps {
   student: Student;
   onPointChange: (studentId: string, change: number, reason?: string) => Promise<void>;
   onClick: () => void;
+  levelThresholds: LevelThresholds;
 }
 
-export default function StudentCard({ student, onPointChange, onClick }: StudentCardProps) {
+export default function StudentCard({ student, onPointChange, onClick, levelThresholds }: StudentCardProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationValue, setAnimationValue] = useState<string>('');
 
   const levelConfig = LEVEL_CONFIG[student.level];
-  const progress = getProgressToNextLevel(student.total_points, student.level);
+  const progress = getProgressToNextLevel(student.total_points, student.level, levelThresholds);
+  const nextLevel = getNextLevel(student.level);
 
   const getInitials = (name: string) => {
     return name
@@ -78,9 +80,9 @@ export default function StudentCard({ student, onPointChange, onClick }: Student
             style={{ width: `${progress.percentage}%` }}
           />
         </div>
-        {progress.pointsNeeded > 0 ? (
+        {progress.pointsNeeded > 0 && nextLevel ? (
           <p className="progress-text">
-            {student.total_points}/{LEVEL_CONFIG[student.level].maxPoints + 1} - Còn {progress.pointsNeeded} điểm lên {LEVEL_CONFIG[Object.keys(LEVEL_CONFIG)[Object.keys(LEVEL_CONFIG).indexOf(student.level) + 1] as keyof typeof LEVEL_CONFIG]?.name}
+            Còn {progress.pointsNeeded} điểm lên {LEVEL_CONFIG[nextLevel].name}
           </p>
         ) : (
           <p className="progress-text">Đã đạt cấp cao nhất!</p>
