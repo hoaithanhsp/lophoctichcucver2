@@ -92,15 +92,15 @@ function App() {
     setCurrentClassId('');
   };
 
-  const loadLevelThresholds = async () => {
-    const { data } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'level_thresholds')
-      .maybeSingle();
-
-    if (data?.value) {
-      setLevelThresholds(data.value as LevelThresholds);
+  const loadLevelThresholds = () => {
+    try {
+      const saved = localStorage.getItem('classpoint_level_thresholds');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setLevelThresholds(parsed);
+      }
+    } catch (err) {
+      console.error('Lỗi khi load level thresholds:', err);
     }
   };
 
