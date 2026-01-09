@@ -65,16 +65,39 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
       correctedThresholds.cay_to = correctedThresholds.cay_con + 1;
     }
 
-    await supabase
-      .from('app_settings')
-      .upsert(
-        { key: 'level_thresholds', value: correctedThresholds, updated_at: new Date().toISOString() },
-        { onConflict: 'key' }
-      );
+    try {
+      // Thử xóa record cũ trước
+      await supabase
+        .from('app_settings')
+        .delete()
+        .eq('key', 'level_thresholds');
 
-    setSaving(false);
-    onUpdate();
-    onClose();
+      // Sau đó insert record mới
+      const { error } = await supabase
+        .from('app_settings')
+        .insert({
+          key: 'level_thresholds',
+          value: correctedThresholds,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Lỗi khi lưu cài đặt:', error);
+        alert('Lỗi khi lưu: ' + error.message);
+        setSaving(false);
+        return;
+      }
+
+      console.log('Đã lưu thành công:', correctedThresholds);
+      alert('Đã lưu cài đặt thành công!');
+      setSaving(false);
+      onUpdate();
+      onClose();
+    } catch (err: any) {
+      console.error('Lỗi:', err);
+      alert('Lỗi không xác định: ' + err.message);
+      setSaving(false);
+    }
   };
 
   const handleThresholdChange = (level: keyof LevelThresholds, value: string) => {
