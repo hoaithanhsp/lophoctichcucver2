@@ -71,8 +71,8 @@ function App() {
     setLoginError('');
 
     // Chỉ chấp nhận tài khoản cố định
-    const validUsername = 'Trần Hoài Thanh';
-    const validPassword = 'hoaithanha2';
+    const validUsername = 'Nguyễn Thị Ngọc Chi';
+    const validPassword = '12345';
 
     if (username.trim() === validUsername && password === validPassword) {
       localStorage.setItem('classpoint_auth', JSON.stringify({ username: username.trim() }));
