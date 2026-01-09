@@ -381,7 +381,7 @@ function App() {
       <header className="header">
         <div className="header-content">
           <div className="header-left">
-            <h1 className="app-title">LỚP HỌC TÍCH CỰC</h1>
+            <h1 className="app-title">CLASS PRO</h1>
             <button onClick={() => setShowClassManager(true)} className="class-selector">
               <span>{currentClass?.name || 'Chọn lớp'}</span>
               <ChevronDown size={18} />
