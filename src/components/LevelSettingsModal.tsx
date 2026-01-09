@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Save, RotateCcw } from 'lucide-react';
+import { X, Save } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface LevelThresholds {
@@ -14,15 +14,15 @@ interface LevelSettingsModalProps {
   onUpdate: () => void;
 }
 
-const DEFAULT_THRESHOLDS: LevelThresholds = {
+const INITIAL_THRESHOLDS: LevelThresholds = {
   hat: 0,
-  nay_mam: 10,
-  cay_con: 20,
-  cay_to: 100
+  nay_mam: 0,
+  cay_con: 0,
+  cay_to: 0
 };
 
 export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsModalProps) {
-  const [thresholds, setThresholds] = useState<LevelThresholds>(DEFAULT_THRESHOLDS);
+  const [thresholds, setThresholds] = useState<LevelThresholds>(INITIAL_THRESHOLDS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -47,20 +47,34 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
   const handleSave = async () => {
     setSaving(true);
 
+    // Auto-correct: đảm bảo thứ tự tăng dần
+    let correctedThresholds = { ...thresholds };
+
+    // Đảm bảo nay_mam >= 1
+    if (correctedThresholds.nay_mam < 1) {
+      correctedThresholds.nay_mam = 1;
+    }
+
+    // Đảm bảo cay_con > nay_mam
+    if (correctedThresholds.cay_con <= correctedThresholds.nay_mam) {
+      correctedThresholds.cay_con = correctedThresholds.nay_mam + 1;
+    }
+
+    // Đảm bảo cay_to > cay_con
+    if (correctedThresholds.cay_to <= correctedThresholds.cay_con) {
+      correctedThresholds.cay_to = correctedThresholds.cay_con + 1;
+    }
+
     await supabase
       .from('app_settings')
       .upsert(
-        { key: 'level_thresholds', value: thresholds, updated_at: new Date().toISOString() },
+        { key: 'level_thresholds', value: correctedThresholds, updated_at: new Date().toISOString() },
         { onConflict: 'key' }
       );
 
     setSaving(false);
     onUpdate();
     onClose();
-  };
-
-  const handleReset = () => {
-    setThresholds(DEFAULT_THRESHOLDS);
   };
 
   const handleThresholdChange = (level: keyof LevelThresholds, value: string) => {
@@ -115,7 +129,7 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
                 />
                 <span className="input-suffix">điểm</span>
               </div>
-              <p className="level-setting-hint">Cấp độ khởi đầu (không thể thay đổi)</p>
+              <p className="level-setting-hint">Cấp độ khởi đầu (0 điểm)</p>
             </div>
 
             <div className="level-setting-item">
@@ -133,7 +147,7 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
                 />
                 <span className="input-suffix">điểm</span>
               </div>
-              <p className="level-setting-hint">Điểm tối thiểu để đạt level này</p>
+              <p className="level-setting-hint">Điểm tối thiểu để lên Nảy Mầm</p>
             </div>
 
             <div className="level-setting-item">
@@ -146,12 +160,12 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
                   type="number"
                   value={thresholds.cay_con}
                   onChange={(e) => handleThresholdChange('cay_con', e.target.value)}
-                  min={thresholds.nay_mam + 1}
+                  min="1"
                   className="form-input"
                 />
                 <span className="input-suffix">điểm</span>
               </div>
-              <p className="level-setting-hint">Phải lớn hơn level Nảy Mầm</p>
+              <p className="level-setting-hint">Điểm tối thiểu để lên Cây Con</p>
             </div>
 
             <div className="level-setting-item">
@@ -164,12 +178,12 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
                   type="number"
                   value={thresholds.cay_to}
                   onChange={(e) => handleThresholdChange('cay_to', e.target.value)}
-                  min={thresholds.cay_con + 1}
+                  min="1"
                   className="form-input"
                 />
                 <span className="input-suffix">điểm</span>
               </div>
-              <p className="level-setting-hint">Phải lớn hơn level Cây Con</p>
+              <p className="level-setting-hint">Điểm tối thiểu để lên Cây To</p>
             </div>
           </div>
 
@@ -185,21 +199,16 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
 
         <div className="modal-footer">
           <button
-            onClick={handleReset}
+            onClick={onClose}
             className="btn-secondary"
             disabled={saving}
           >
-            <RotateCcw size={18} />
-            Đặt lại mặc định
+            Hủy
           </button>
           <button
             onClick={handleSave}
             className="btn-primary"
-            disabled={
-              saving ||
-              thresholds.nay_mam >= thresholds.cay_con ||
-              thresholds.cay_con >= thresholds.cay_to
-            }
+            disabled={saving}
           >
             <Save size={18} />
             {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
