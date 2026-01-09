@@ -468,6 +468,7 @@ function App() {
                 student={student}
                 onPointChange={handlePointChange}
                 onClick={() => setSelectedStudent(student)}
+                levelThresholds={levelThresholds}
               />
             ))}
           </div>
