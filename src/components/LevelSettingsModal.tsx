@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
 interface LevelThresholds {
   hat: number;
@@ -13,6 +12,8 @@ interface LevelSettingsModalProps {
   onClose: () => void;
   onUpdate: () => void;
 }
+
+const STORAGE_KEY = 'classpoint_level_thresholds';
 
 const INITIAL_THRESHOLDS: LevelThresholds = {
   hat: 0,
@@ -30,21 +31,21 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
     loadSettings();
   }, []);
 
-  const loadSettings = async () => {
+  const loadSettings = () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'level_thresholds')
-      .maybeSingle();
-
-    if (data?.value) {
-      setThresholds(data.value as LevelThresholds);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setThresholds(parsed);
+      }
+    } catch (err) {
+      console.error('Lỗi khi load settings:', err);
     }
     setLoading(false);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     setSaving(true);
 
     // Auto-correct: đảm bảo thứ tự tăng dần
@@ -66,28 +67,7 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
     }
 
     try {
-      // Thử xóa record cũ trước
-      await supabase
-        .from('app_settings')
-        .delete()
-        .eq('key', 'level_thresholds');
-
-      // Sau đó insert record mới
-      const { error } = await supabase
-        .from('app_settings')
-        .insert({
-          key: 'level_thresholds',
-          value: correctedThresholds,
-          updated_at: new Date().toISOString()
-        });
-
-      if (error) {
-        console.error('Lỗi khi lưu cài đặt:', error);
-        alert('Lỗi khi lưu: ' + error.message);
-        setSaving(false);
-        return;
-      }
-
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(correctedThresholds));
       console.log('Đã lưu thành công:', correctedThresholds);
       alert('Đã lưu cài đặt thành công!');
       setSaving(false);
@@ -95,7 +75,7 @@ export default function LevelSettingsModal({ onClose, onUpdate }: LevelSettingsM
       onClose();
     } catch (err: any) {
       console.error('Lỗi:', err);
-      alert('Lỗi không xác định: ' + err.message);
+      alert('Lỗi khi lưu: ' + err.message);
       setSaving(false);
     }
   };
