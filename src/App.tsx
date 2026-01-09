@@ -35,9 +35,9 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [levelThresholds, setLevelThresholds] = useState<LevelThresholds>({
     hat: 0,
-    nay_mam: 50,
-    cay_con: 100,
-    cay_to: 200
+    nay_mam: 10,
+    cay_con: 20,
+    cay_to: 100
   });
 
   useEffect(() => {
